@@ -1,0 +1,1 @@
+-- Run manually in psql to create tables
