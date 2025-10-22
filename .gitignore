@@ -3,19 +3,32 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-venv/
 *.sqlite3
+*.log
+*.db
 
-# Environment variables
+# Virtual environment
+venv/
 .env
 
-# OS
-.DS_Store
-Thumbs.db
+# VSCode / IDEs
+.vscode/
+.idea/
+
+# Docker
+*.env.local
+*.env.override
+docker-compose.override.yml
 
 # Logs
-*.log
 logs/
+*.log
 
-# Docker overrides
-docker-compose.override.yml
+# MacOS
+.DS_Store
+
+# Ignore sensitive or large files
+*.key
+*.pem
+*.crt
+*.bak
