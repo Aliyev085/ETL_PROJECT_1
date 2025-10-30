@@ -57,7 +57,6 @@ class DBClient:
         if not flats:
             return 0
 
-        # Updated columns (removed is_renovated)
         cols = [
             "listing_id", "url", "title", "price_azn", "price_per_sqm",
             "rooms", "area_sqm", "floor_current", "floor_total",
@@ -65,7 +64,6 @@ class DBClient:
             "has_mortgage", "has_deed", "posted_at"
         ]
 
-        # Prepare parameter values
         values = [[getattr(f, c) for c in cols] for f in flats]
         placeholders = "(" + ",".join(["%s"] * len(cols)) + ")"
         insert_sql = f"""
@@ -88,3 +86,12 @@ class DBClient:
             raise
 
         return len(flats)
+
+    # ✅ Helper for recent listings (used if needed)
+    def fetch_latest_listings(self, limit: int = 50):
+        """Fetch most recent listings for publishing fallback."""
+        query = "SELECT listing_id AS id, url FROM public.bina_apartments ORDER BY id DESC LIMIT %s"
+        with self.cursor() as cur:
+            cur.execute(query, (limit,))
+            rows = [{"id": r[0], "url": r[1]} for r in cur.fetchall()]
+        return rows

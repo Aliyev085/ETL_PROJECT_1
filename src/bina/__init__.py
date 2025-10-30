@@ -1,8 +1,9 @@
 __all__ = [
-"config",
-"db",
-"helpers",
-"models",
-"scraper",
-"pipeline",
+    "config",
+    "db",
+    "helpers",
+    "models",
+    "scraper",           
+    "scraper_each_item",
+    "pipeline",
 ]

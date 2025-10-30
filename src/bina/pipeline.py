@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Dict
 
 from .db import DBClient
 from .scraper import SeleniumDriver
@@ -20,10 +20,13 @@ class Pipeline:
         return bool(cards)
 
     # --------------------------
-    # Old behavior: scrape and insert
+    # Main ETL behavior
     # --------------------------
-    def run(self, max_new: int = 100) -> int:
-        """Scroll, collect cards, parse details, and insert only new rows into DB."""
+    def run(self, max_new: int = 100) -> list[Dict]:
+        """
+        Scroll, collect cards, parse details, insert only new rows into DB,
+        and return list of inserted {id, url} dicts for RabbitMQ publishing.
+        """
         seen: set[int] = set()
         flats: List[Flat] = []
         inserted_total = 0
@@ -52,14 +55,14 @@ class Pipeline:
             self.browser.scroll_once()
 
         if not flats:
-            return 0
+            return []
 
         # Filter out IDs that already exist in DB
         existing = self.db.listing_ids_exist([f.listing_id for f in flats])
         new_flats = [f for f in flats if f.listing_id not in existing]
 
         if not new_flats:
-            return 0
+            return []
 
         # 🔍 DEBUG: print a preview of each Flat before inserting
         print("\n[DEBUG] New flats about to be inserted:")
@@ -71,13 +74,16 @@ class Pipeline:
 
         inserted = self.db.insert_new(new_flats)
         inserted_total += inserted
-        return inserted_total
+
+        # ✅ Return id+url of inserted listings
+        inserted_list = [{"id": f.listing_id, "url": f.url} for f in new_flats]
+        return inserted_list
 
     # --------------------------
-    # New behavior: producer for RabbitMQ
+    # Optional direct producer (for debug)
     # --------------------------
     def run_producer(self, max_new: int = 100) -> int:
-        """Collect new cards and publish only listing IDs + URLs to RabbitMQ."""
+        """Collect new cards and publish listing IDs + URLs directly to RabbitMQ."""
         seen: set[int] = set()
         published = 0
         rabbit = RabbitMQ()

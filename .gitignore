@@ -1,33 +1,58 @@
-# Python
+# -------------------------------
+# 🐍 Python
+# -------------------------------
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.sqlite3
-*.log
 *.db
 
-# Virtual environment
+# -------------------------------
+# 🧪 Virtual environments
+# -------------------------------
 venv/
+etl/venv/
+
+# -------------------------------
+# 🔐 Environment & secrets
+# -------------------------------
 .env
-
-# VSCode / IDEs
-.vscode/
-.idea/
-
-# Docker
 *.env.local
 *.env.override
-docker-compose.override.yml
+.env.*
+!example.env  # allow a safe template if needed
 
-# Logs
+# -------------------------------
+# ⚙️ Docker
+# -------------------------------
+docker-compose.override.yml
+*.pid
+
+# -------------------------------
+# 🧾 Logs & outputs
+# -------------------------------
 logs/
 *.log
+*.out
+*.err
 
-# MacOS
+# -------------------------------
+# 💻 IDEs / Editors
+# -------------------------------
+.vscode/
+.idea/
+*.swp
+
+# -------------------------------
+# 🍏 MacOS / Windows
+# -------------------------------
 .DS_Store
+Thumbs.db
 
-# Ignore sensitive or large files
+# -------------------------------
+# 🔒 Certificates / Keys
+# -------------------------------
 *.key
 *.pem
 *.crt

@@ -16,11 +16,11 @@ Notes:
 """
 
 import argparse
-
 from bina.config import settings
 from bina.db import DBClient
 from bina.scraper import SeleniumDriver
 from bina.pipeline import Pipeline
+from bina.rabbit import RabbitMQ
 
 
 def main() -> None:
@@ -36,6 +36,7 @@ def main() -> None:
     db = DBClient()
     browser = SeleniumDriver()
     pipe = Pipeline(db, browser)
+    rabbit = RabbitMQ()
 
     try:
         browser.get(settings.BINA_BASE_URL)
@@ -45,16 +46,28 @@ def main() -> None:
             print(f"[verify] access ok: {ok}")
             return
 
-        if args.initial:
-            max_new = settings.MAX_LISTINGS_INITIAL
-        else:
-            max_new = settings.MAX_LISTINGS_INCREMENTAL
+        max_new = (
+            settings.MAX_LISTINGS_INITIAL
+            if args.initial
+            else settings.MAX_LISTINGS_INCREMENTAL
+        )
 
-        inserted = pipe.run(max_new=max_new)
         mode = "initial" if args.initial else "incremental"
-        print(f"[{mode}] inserted new rows: {inserted}")
+
+        # Run pipeline and get inserted listing info
+        new_listings = pipe.run(max_new=max_new)
+
+        if new_listings:
+            for item in new_listings:
+                payload = {"listing_id": item["id"], "url": item["url"]}
+                rabbit.publish(payload)
+                print(f"[x] Published listing_id={item['id']} to queue {settings.RABBIT_QUEUE}")
+            print(f"[{mode}] inserted new rows: {len(new_listings)}")
+        else:
+            print(f"[{mode}] no new listings found.")
 
     finally:
+        rabbit.close()
         browser.close()
         db.close()
 
