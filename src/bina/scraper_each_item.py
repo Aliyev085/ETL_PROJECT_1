@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # scraper_each_item.py
-
 import json
 import re
 import time
@@ -9,9 +8,29 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 import psycopg2
 
+# ---------- ENV + DOTENV AUTO LOAD ----------
+from dotenv import load_dotenv
+dotenv_path = os.path.join(os.path.dirname(__file__), "../../.env")
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    print(f"[WARN] .env not found at {dotenv_path}", flush=True)
+
+# ---------- stdout flush fix ----------
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 # ---------- ENVIRONMENT DEBUG ----------
 print("\n[DEBUG] ENVIRONMENT CHECK:")
-for key in ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD", "RABBIT_HOST", "RABBIT_QUEUE"]:
+for key in [
+    "DB_HOST",
+    "DB_PORT",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASSWORD",
+    "RABBIT_HOST",
+    "RABBIT_QUEUE",
+]:
     print(f"  {key} = {os.getenv(key)}")
 print("[DEBUG] Current working dir:", os.getcwd(), flush=True)
 print("[DEBUG] Python executable:", sys.executable, flush=True)
@@ -20,15 +39,11 @@ print("-" * 60, flush=True)
 # --------------------------------------
 
 try:
-    import undetected_chromedriver as uc  # stealth driver
+    import undetected_chromedriver as uc
     _USE_UC = True
 except Exception:
     from selenium import webdriver
     _USE_UC = False
-
-# ---------- stdout fix ----------
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -37,6 +52,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from bina.config import settings
 from bina.rabbit import RabbitMQ
+
 
 # ---------- Helpers ----------
 
@@ -85,7 +101,7 @@ class DBClient:
         )
         self.conn.autocommit = False
 
-    def update_listing(self, listing_id: int, data: dict):
+    def upsert_listing(self, listing_id: int, data: dict):
         if not data:
             return
         try:
@@ -94,17 +110,26 @@ class DBClient:
             print(f"[WARN] Invalid listing_id: {listing_id}", flush=True)
             return
 
-        cols = ", ".join(f"{k}=%s" for k in data.keys())
-        vals = list(data.values()) + [listing_id]
-        q = f"UPDATE bina_apartments SET {cols} WHERE listing_id=%s"
+        cols = ", ".join(data.keys())
+        placeholders = ", ".join(["%s"] * len(data))
+        update_clause = ", ".join([f"{col}=EXCLUDED.{col}" for col in data.keys()])
+
+        q = f"""
+        INSERT INTO bina_apartments (listing_id, {cols})
+        VALUES (%s, {placeholders})
+        ON CONFLICT (listing_id) DO UPDATE
+        SET {update_clause};
+        """
+
+        vals = [listing_id] + list(data.values())
 
         try:
             with self.conn.cursor() as c:
                 c.execute(q, vals)
-                print(f"[DB] Updated listing_id={listing_id} ({c.rowcount} rows)", flush=True)
+                print(f"[DB] UPSERT listing_id={listing_id} ✅", flush=True)
             self.conn.commit()
         except Exception as e:
-            print(f"[DB ERROR] Failed to update {listing_id}: {e}", flush=True)
+            print(f"[DB ERROR] Failed to upsert {listing_id}: {e}", flush=True)
             self.conn.rollback()
 
     def close(self):
@@ -224,17 +249,24 @@ def scrape_listing(detail: dict):
         except Exception:
             is_constructed = False
 
-        print(f"[SCRAPE] ID={lid}, Owner={owner}, Phone={phone}, Views={views}, Constructed={is_constructed}", flush=True)
+        print(
+            f"[SCRAPE] ID={lid}, Owner={owner}, Phone={phone}, Views={views}, Constructed={is_constructed}",
+            flush=True,
+        )
 
-        payload = {"is_scraped": True}
-        if desc: payload["description"] = desc
-        if owner: payload["posted_by"] = owner
-        if phone: payload["contact_number"] = phone
-        if views is not None: payload["view_count"] = views
+        payload = {"is_scraped": True, "url": url}
+        if desc:
+            payload["description"] = desc
+        if owner:
+            payload["posted_by"] = owner
+        if phone:
+            payload["contact_number"] = phone
+        if views is not None:
+            payload["view_count"] = views
         payload["is_constructed"] = is_constructed
 
-        db.update_listing(lid, payload)
-        print(f"[SCRAPE] ✅ Listing {lid} updated successfully", flush=True)
+        db.upsert_listing(lid, payload)
+        print(f"[SCRAPE] ✅ Listing {lid} processed successfully", flush=True)
 
     except Exception as e:
         print(f"[!] Error scraping listing {lid}: {e}", flush=True)
@@ -246,12 +278,16 @@ def scrape_listing(detail: dict):
 # ---------- RabbitMQ ----------
 
 def main():
+    print("[DEBUG] Connecting to RabbitMQ...", flush=True)
     rabbit = RabbitMQ()
+    rabbit.channel.queue_declare(queue=settings.RABBIT_QUEUE, durable=True)
+    print(f"[DEBUG] Queue '{settings.RABBIT_QUEUE}' declared ✅", flush=True)
+
     execs = ThreadPoolExecutor(max_workers=3)
 
     def callback(ch, method, props, body):
+        print("\n[CALLBACK] Triggered!", flush=True)
         try:
-            print("\n[CALLBACK] Triggered!", flush=True)
             d = json.loads(body)
             print(f"[CALLBACK] Received message: {d}", flush=True)
             execs.submit(scrape_listing, d)
@@ -259,11 +295,12 @@ def main():
             print("[CALLBACK] Ack sent ✅", flush=True)
         except Exception as e:
             print(f"[CALLBACK ERROR] {e}", file=sys.stderr, flush=True)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     rabbit.channel.basic_qos(prefetch_count=3)
-    rabbit.channel.basic_consume(queue=settings.RABBIT_QUEUE, on_message_callback=callback)
-    print("[*] Waiting for messages...", flush=True)
+    rabbit.channel.basic_consume(queue=settings.RABBIT_QUEUE, on_message_callback=callback, auto_ack=False)
 
+    print("[*] Waiting for messages...", flush=True)
     try:
         rabbit.channel.start_consuming()
     except KeyboardInterrupt:
