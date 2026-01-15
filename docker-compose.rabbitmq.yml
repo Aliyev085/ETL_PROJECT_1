@@ -1,18 +1,23 @@
-version: "3.8"
-
+#docker-compose.rabbitmq.yml
 services:
   rabbitmq:
     image: rabbitmq:3.12-management
     container_name: rabbitmq
-    ports:
-      - "5672:5672"     # AMQP protocol
-      - "15672:15672"   # Web management UI
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: aliyev.user
-      RABBITMQ_DEFAULT_PASS: AliyevServerBlack1002025Xyz
+      RABBITMQ_DEFAULT_PASS: EtlRabbitBlack1002025Xyz
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - etl_net
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    restart: unless-stopped
 
 volumes:
   rabbitmq_data:
+
+networks:
+  etl_net:
+    external: true

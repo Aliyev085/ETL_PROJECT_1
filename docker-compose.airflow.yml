@@ -1,0 +1,153 @@
+#docker-compose.airflow.yml
+x-airflow-env: &airflow_env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__WEBSERVER__RBAC: "True"
+  AIRFLOW__CORE__FERNET_KEY: "X9rAn0ztOklevitROmDtNUMNl2ocztI9IDawiuGS-WQ="
+  AIRFLOW__WEBSERVER__SECRET_KEY: "b0902f2852bb33ef1697f610958d212a2cf7a687c7670c56eee61ff8d0aeac71"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+
+services:
+
+  # =====================================================
+  # AIRFLOW DATABASE
+  # =====================================================
+  airflow_db:
+    image: postgres:16
+    container_name: airflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    networks:
+      - etl_net
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+
+  # =====================================================
+  # MAIN ETL POSTGRES
+  # =====================================================
+  etl_postgres:
+    image: postgres:16
+    container_name: etl_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: Aliyev_user
+      POSTGRES_PASSWORD: EtlpostgresBlack1002025Xyz
+      POSTGRES_DB: etlserver_db
+    networks:
+      - etl_net
+    volumes:
+      - etl_postgres_data:/var/lib/postgresql/data
+
+  # =====================================================
+  # RABBITMQ BROKER
+  # =====================================================
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    env_file:
+      - /opt/Etl_server_project_1/.env
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBIT_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBIT_PASSWORD}"
+    networks:
+      - etl_net
+    volumes:
+      - etl_rabbitmq_data:/var/lib/rabbitmq
+
+  # =====================================================
+  # AIRFLOW WEBSERVER (WITH SELENIUM IMAGE)
+  # =====================================================
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow_webserver
+    restart: unless-stopped
+    depends_on:
+      - airflow_db
+      - rabbitmq
+      - etl_postgres
+    env_file:
+      - /opt/Etl_server_project_1/.env
+    environment:
+      <<: *airflow_env
+      PYTHONPATH: /opt/Etl_server_project_1/src
+    ports:
+      - "8080:8080"
+    volumes:
+      - /opt/Etl_server_project_1:/opt/Etl_server_project_1:rw
+      - /opt/Etl_server_project_1/airflow/dags:/opt/airflow/dags:rw
+    networks:
+      - etl_net
+    command: webserver
+
+  # =====================================================
+  # AIRFLOW SCHEDULER (WITH SELENIUM IMAGE)
+  # =====================================================
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow_scheduler
+    restart: unless-stopped
+    depends_on:
+      - airflow_db
+      - rabbitmq
+      - etl_postgres
+    env_file:
+      - /opt/Etl_server_project_1/.env
+    environment:
+      <<: *airflow_env
+      PYTHONPATH: /opt/Etl_server_project_1/src
+    volumes:
+      - /opt/Etl_server_project_1:/opt/Etl_server_project_1:rw
+      - /opt/Etl_server_project_1/airflow/dags:/opt/airflow/dags:rw
+    networks:
+      - etl_net
+    command: scheduler
+
+  # =====================================================
+  # AIRFLOW INIT (DB INIT + USER CREATION)
+  # =====================================================
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow_init
+    depends_on:
+      - airflow_db
+    env_file:
+      - /opt/Etl_server_project_1/.env
+    environment:
+      <<: *airflow_env
+      PYTHONPATH: /opt/Etl_server_project_1/src
+    volumes:
+      - /opt/Etl_server_project_1:/opt/Etl_server_project_1:rw
+      - /opt/Etl_server_project_1/airflow/dags:/opt/airflow/dags:rw
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true
+      "
+    networks:
+      - etl_net
+
+# =====================================================
+# NETWORKS & VOLUMES
+# =====================================================
+networks:
+  etl_net:
+    external: true
+
+volumes:
+  airflow_db_data:
+  etl_rabbitmq_data:
+  etl_postgres_data:

@@ -1,0 +1,42 @@
+#dockerfile.airflow file
+# ============================================================
+# BASE IMAGE
+# ============================================================
+FROM apache/airflow:2.10.3-python3.12
+
+# ------------------------------------------------------------
+# Install Chrome + ChromeDriver
+# ------------------------------------------------------------
+USER root
+
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    libnss3 \
+    libgconf-2-4 \
+    libxi6 \
+    libgbm1 \
+    libasound2 \
+    && apt-get clean
+
+# Fix Chrome shared memory
+RUN mkdir -p /dev/shm && chmod 777 /dev/shm
+
+# ------------------------------------------------------------
+# Install Python dependencies
+# ------------------------------------------------------------
+USER airflow
+
+COPY --chown=airflow:root airflow/requirements.txt /tmp/requirements.txt
+
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# ------------------------------------------------------------
+# Copy project files
+# ------------------------------------------------------------
+USER root
+COPY . /opt/Etl_server_project_1
+RUN chown -R airflow:root /opt/Etl_server_project_1
+
+USER airflow
+ENV PYTHONPATH="/opt/Etl_server_project_1/src"

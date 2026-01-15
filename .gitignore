@@ -7,6 +7,8 @@ __pycache__/
 *.pyd
 *.sqlite3
 *.db
+*.whl
+*.egg-info/
 
 # -------------------------------
 # 🧪 Virtual environments
@@ -15,13 +17,19 @@ venv/
 etl/venv/
 
 # -------------------------------
+# 📦 Build artifacts
+# -------------------------------
+build/
+dist/
+
+# -------------------------------
 # 🔐 Environment & secrets
 # -------------------------------
 .env
+.env.*
 *.env.local
 *.env.override
-.env.*
-!example.env  # allow a safe template if needed
+!example.env
 
 # -------------------------------
 # ⚙️ Docker
@@ -38,6 +46,13 @@ logs/
 *.err
 
 # -------------------------------
+# 🌬 Airflow
+# -------------------------------
+airflow/logs/
+airflow/*.db
+airflow/webserver_config.py
+
+# -------------------------------
 # 💻 IDEs / Editors
 # -------------------------------
 .vscode/
@@ -51,11 +66,10 @@ logs/
 Thumbs.db
 
 # -------------------------------
-# 🔒 Certificates / Keys
+# 🔒 Certificates / Backups
 # -------------------------------
 *.key
 *.pem
 *.crt
 *.bak
-page_dump.html
 page_dump.html

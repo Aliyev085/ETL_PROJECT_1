@@ -1,20 +1,20 @@
+#docker-compose.yml
 services:
   postgres:
     image: postgres:16
     container_name: etl_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: Aliyev_user
+      POSTGRES_PASSWORD: EtlpostgresBlack1002025Xyz
+      POSTGRES_DB: etlserver_db
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U Aliyev_user -d etlserver_db"]
       interval: 10s
-      timeout: 5s
       retries: 5
     networks:
       - etl_net
@@ -24,10 +24,10 @@ services:
     container_name: etl_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_DEFAULT_EMAIL: admin@aliyev.com
+      PGADMIN_DEFAULT_PASSWORD: Aliyev
     ports:
-      - "${PGADMIN_PORT}:80"
+      - "5050:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
@@ -36,9 +36,10 @@ services:
     networks:
       - etl_net
 
-networks:
-  etl_net:
-
 volumes:
   postgres_data:
   pgadmin_data:
+
+networks:
+  etl_net:
+    external: true
